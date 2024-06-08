@@ -194,6 +194,14 @@ public class Setting {
         Prefers.put("background", background);
     }
 
+    public static int getRtsp() {
+        return Prefers.getInt("rtsp");
+    }
+
+    public static void putRtsp(int rtsp) {
+        Prefers.put("rtsp", rtsp);
+    }
+
     public static int getSiteMode() {
         return Prefers.getInt("site_mode", 1);
     }
@@ -286,14 +294,6 @@ public class Setting {
         return Math.min(Math.max(Prefers.getInt("danmu_alpha", 90), 10), 100);
     }
 
-    public static void putDanmuSync(boolean sync) {
-        Prefers.put("danmu_sync", sync);
-    }
-
-    public static boolean isDanmuSync() {
-        return Prefers.getBoolean("danmu_sync", false);
-    }
-
     public static void putDanmuAlpha(int alpha) {
         Prefers.put("danmu_alpha", alpha);
     }
@@ -314,12 +314,12 @@ public class Setting {
         Prefers.put("exo_tunnel", tunnel);
     }
 
-    public static boolean isBackupAuto() {
-        return Prefers.getBoolean("backup_auto");
+    public static int getBackupMode() {
+        return Prefers.getInt("backup_mode", 1);
     }
 
-    public static void putBackupAuto(boolean auto) {
-        Prefers.put("backup_auto", auto);
+    public static void putBackupMode(int auto) {
+        Prefers.put("backup_mode", auto);
     }
 
     public static float getThumbnail() {
@@ -500,6 +500,14 @@ public class Setting {
 
     public static void putRemoveAd(boolean remove) {
         Prefers.put("remove_ad", remove);
+    }
+
+    public static String getThunderCacheDir() {
+        return Prefers.getString("thunder_cache_dir", "");
+    }
+
+    public static void putThunderCacheDir(String dir) {
+        Prefers.put("thunder_cache_dir", dir);
     }
 
 }

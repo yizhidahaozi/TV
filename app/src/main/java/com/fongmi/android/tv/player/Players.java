@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Bundle;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
@@ -14,6 +15,7 @@ import androidx.annotation.NonNull;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.VideoSize;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.exoplayer.util.EventLogger;
@@ -80,11 +82,9 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
     private Sub sub;
 
     private long position;
-    private float speed;
     private int player;
     private int error;
     private int retry;
-    private boolean danmuSync;
 
     public static boolean isExo(int type) {
         return type == EXO;
@@ -92,6 +92,10 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
 
     public static boolean isHard(int player) {
         return Setting.getDecode(player) == HARD;
+    }
+
+    public static boolean isSoft(int player) {
+        return Setting.getDecode(player) == SOFT;
     }
 
     public boolean isExo() {
@@ -107,7 +111,6 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
         builder = new StringBuilder();
         runnable = ErrorEvent::timeout;
         formatter = new Formatter(builder, Locale.getDefault());
-        danmuSync = Setting.isDanmuSync();
         createSession(activity);
         return this;
     }
@@ -162,6 +165,11 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
 
     public IjkVideoView ijk() {
         return ijkPlayer;
+    }
+
+    public VideoSize getVideoSize() {
+        if (isExo()) return exo().getVideoSize();
+        return new VideoSize(ijk().getVideoWidth(), ijk().getVideoHeight());
     }
 
     public Map<String, String> getHeaders() {
@@ -250,6 +258,10 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
         return danmuView != null && danmuView.isPrepared();
     }
 
+    public boolean canAdjustSpeed() {
+        return isIjk() || !Setting.isTunnel();
+    }
+
     public boolean haveTrack(int type) {
         if (isExo() && exoPlayer != null) return ExoUtil.haveTrack(exoPlayer.getCurrentTracks(), type);
         if (isIjk() && ijkPlayer != null) return ijkPlayer.haveTrack(type);
@@ -272,6 +284,10 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
 
     public boolean isEmpty() {
         return TextUtils.isEmpty(getUrl());
+    }
+
+    public boolean isLive() {
+        return getDuration() < 5 * 60 * 1000;
     }
 
     public boolean isVod() {
@@ -299,8 +315,8 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
     }
 
     public String setSpeed(float speed) {
-        if (exoPlayer != null) exoPlayer.setPlaybackSpeed(this.speed = speed);
-        if (ijkPlayer != null) ijkPlayer.setSpeed(this.speed = speed);
+        if (exoPlayer != null && !Setting.isTunnel()) exoPlayer.setPlaybackSpeed(speed);
+        if (ijkPlayer != null) ijkPlayer.setSpeed(speed);
         return getSpeedText();
     }
 
@@ -577,6 +593,12 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
         return list.toArray(new String[0]);
     }
 
+    public Bundle getHeaderBundle() {
+        Bundle bundle = new Bundle();
+        for (Map.Entry<String, String> entry : getHeaders().entrySet()) bundle.putString(entry.getKey(), entry.getValue());
+        return bundle;
+    }
+
     public void checkData(Intent data) {
         try {
             if (data == null || data.getExtras() == null) return;
@@ -674,8 +696,7 @@ public class Players implements Player.Listener, IMediaPlayer.Listener, Analytic
 
     @Override
     public void updateTimer(DanmakuTimer timer) {
-        if (danmuSync) App.post(() -> timer.update(getPosition()));
-        else if (speed != 1) timer.add((long) (timer.lastInterval() * (speed - 1)));
+
     }
 
     @Override

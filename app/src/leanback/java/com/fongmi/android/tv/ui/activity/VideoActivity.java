@@ -280,7 +280,7 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
     }
 
     private PlayerView getExo() {
-        return Setting.getRender() == 0 ? mBinding.surface : mBinding.texture;
+        return mBinding.exo;
     }
 
     private IjkVideoView getIjk() {
@@ -319,7 +319,7 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
     protected void initView() {
         mKeyDown = CustomKeyDownVod.create(this, mBinding.video);
         mFrameParams = mBinding.video.getLayoutParams();
-        mClock = Clock.create(mBinding.display.time);
+        mClock = Clock.create(mBinding.display.clock);
         mDanmakuContext = DanmakuContext.create();
         mPlayers = new Players().init(this);
         mBroken = new ArrayList<>();
@@ -349,14 +349,14 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
         mBinding.control.text.setOnClickListener(this::onTrack);
         mBinding.control.audio.setOnClickListener(this::onTrack);
         mBinding.control.video.setOnClickListener(this::onTrack);
-        mBinding.control.text.setAddListener(this::onTextAdd);
-        mBinding.control.text.setSubListener(this::onTextSub);
-        mBinding.control.speed.setAddListener(this::onSpeedAdd);
-        mBinding.control.speed.setSubListener(this::onSpeedSub);
-        mBinding.control.ending.setAddListener(this::onEndingAdd);
-        mBinding.control.ending.setSubListener(this::onEndingSub);
-        mBinding.control.opening.setAddListener(this::onOpeningAdd);
-        mBinding.control.opening.setSubListener(this::onOpeningSub);
+        mBinding.control.text.setUpListener(this::onTextAdd);
+        mBinding.control.text.setDownListener(this::onTextSub);
+        mBinding.control.speed.setUpListener(this::onSpeedAdd);
+        mBinding.control.speed.setDownListener(this::onSpeedSub);
+        mBinding.control.ending.setUpListener(this::onEndingAdd);
+        mBinding.control.ending.setDownListener(this::onEndingSub);
+        mBinding.control.opening.setUpListener(this::onOpeningAdd);
+        mBinding.control.opening.setDownListener(this::onOpeningSub);
         mBinding.control.loop.setOnClickListener(view -> onLoop());
         mBinding.control.danmu.setOnClickListener(view -> onDanmu());
         mBinding.control.next.setOnClickListener(view -> checkNext());
@@ -495,8 +495,10 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
     private void setPlayerView() {
         getIjk().setPlayer(mPlayers.getPlayer());
         mBinding.control.player.setText(mPlayers.getPlayerText());
+        mBinding.control.speed.setEnabled(mPlayers.canAdjustSpeed());
         getExo().setVisibility(mPlayers.isExo() ? View.VISIBLE : View.GONE);
         getIjk().setVisibility(mPlayers.isIjk() ? View.VISIBLE : View.GONE);
+        mBinding.control.speed.setText(mPlayers.setSpeed(mHistory.getSpeed()));
     }
 
     private void setDecodeView() {
@@ -782,10 +784,10 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
     }
 
     private void showDisplayInfo() {
-        mBinding.display.time.setVisibility(Setting.isDisplayTime() || isVisible(mBinding.widget.info)  ? View.VISIBLE : View.GONE);
+        mBinding.display.clock.setVisibility(Setting.isDisplayTime() || isVisible(mBinding.widget.info)  ? View.VISIBLE : View.GONE);
         mBinding.display.netspeed.setVisibility(Setting.isDisplaySpeed() && !isVisible(mBinding.control.getRoot()) ? View.VISIBLE : View.GONE);
         mBinding.display.duration.setVisibility(Setting.isDisplayDuration() && !isVisible(mBinding.control.getRoot()) ? View.VISIBLE : View.GONE);
-        mBinding.display.progress.setVisibility(Setting.isDisplayMiniProgress() && !isVisible(mBinding.control.getRoot()) ? View.VISIBLE : View.GONE);
+        mBinding.display.progress.setVisibility(Setting.isDisplayMiniProgress() && !isVisible(mBinding.control.getRoot()) && (mPlayers.getDuration() > 60000) ? View.VISIBLE : View.GONE);
     }
 
     private void onTimeChangeDisplaySpeed() {
@@ -793,7 +795,7 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
         long position = mPlayers.getPosition();
         if (Setting.isDisplaySpeed() && visible) Traffic.setSpeed(mBinding.display.netspeed);
         if (Setting.isDisplayDuration() && visible && position > 0) mBinding.display.duration.setText(mPlayers.getPositionTime(0) + "/" + mPlayers.getDurationTime());
-        if (Setting.isDisplayMiniProgress() && visible && position > 0) mBinding.display.progress.setProgress((int)(position * 100 / mPlayers.getDuration()));
+        if (Setting.isDisplayMiniProgress() && visible && position > 0 && (mPlayers.getDuration() > 60000)) mBinding.display.progress.setProgress((int)(position * 100 / mPlayers.getDuration()));
         showDisplayInfo();
     }
 
@@ -1225,7 +1227,7 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
         if (Setting.isIncognito() && mHistory.getKey().equals(getHistoryKey())) mHistory.delete();
         mBinding.control.opening.setText(mHistory.getOpening() == 0 ? getString(R.string.play_op) : mPlayers.stringToTime(mHistory.getOpening()));
         mBinding.control.ending.setText(mHistory.getEnding() == 0 ? getString(R.string.play_ed) : mPlayers.stringToTime(mHistory.getEnding()));
-        mBinding.control.speed.setText(mPlayers.setSpeed(mHistory.getSpeed()));
+        mHistory.setVodPic(item.getVodPic());
         mPlayers.setPlayer(getPlayer());
         setScale(getScale());
         setPlayerView();
@@ -1236,7 +1238,6 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
         History history = new History();
         history.setKey(getHistoryKey());
         history.setCid(VodConfig.getCid());
-        history.setVodPic(item.getVodPic());
         history.setVodName(item.getVodName());
         history.findEpisode(item.getVodFlags());
         history.setSpeed(Setting.getPlaySpeed());
@@ -1406,6 +1407,7 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
     }
 
     private void onError(ErrorEvent event) {
+        Track.delete(getHistoryKey());
         showError(event.getMsg());
         mClock.setCallback(null);
         mPlayers.stop();
@@ -1664,15 +1666,15 @@ public class VideoActivity extends BaseActivity implements CustomKeyDownVod.List
 
     @Override
     public void onSeekTo(int time) {
-        mKeyDown.resetTime();
         mPlayers.seekTo(time);
+        mKeyDown.resetTime();
         showProgress();
         onPlay();
     }
 
     @Override
     public void onSpeedUp() {
-        if (!mPlayers.isPlaying()) return;
+        if (!mPlayers.isPlaying() || !mPlayers.canAdjustSpeed()) return;
         mBinding.control.speed.setText(mPlayers.setSpeed(mPlayers.getSpeed() < 3 ? 3 : 5));
         mBinding.widget.speed.startAnimation(ResUtil.getAnim(R.anim.forward));
         mBinding.widget.speed.setVisibility(View.VISIBLE);
